@@ -1,12 +1,14 @@
 # companion-di
 
 companion-di is a very simple dependency injection framework (if you could even call it a framework).
-Its goal is to smoothen the development of small tools projects.
+Its goal is to smoothen the development of small tools projects without the overhead of some established dependecy injection frameworks.
 
-## Plans
+## Upcoming features
 
 1. Currently only singleton beans are supported. I'm planning on adding support for a thread scope to simplify multithreading in tools projects.
 2. The @Bean-Annotation only works on class-level so far but will be supported on methods via @Configuration-Classes in the future.
+
+Other than that no features are planned.
 
 # Usage
 
