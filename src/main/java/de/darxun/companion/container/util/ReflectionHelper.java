@@ -9,6 +9,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -106,5 +107,73 @@ public class ReflectionHelper {
         }
 
         return beanIds;
+    }
+
+    /**
+     * Returns a set of interfaces from the given class and its superclasses (recursively)
+     * @param clazz the class to analyse
+     * @return set of interfaces
+     */
+    public static Set<Class<?>> getAllInterfaces(final Class<?> clazz) {
+        if (clazz == null) {
+            throw new IllegalArgumentException("clazz may not be null");
+        }
+
+        Set<Class<?>> interfaces = new HashSet<>();
+
+        addAllInterfaces(clazz, interfaces);
+
+        return interfaces;
+    }
+
+    /**
+     * Adds the classes and its superclasses interfaces set of interfaces (recursively)
+     * @param clazz the class to analyze
+     * @param interfaces set of interfaces to add to
+     */
+    private static void addAllInterfaces(final Class<?> clazz, final Set<Class<?>> interfaces) {
+        // add the interfaces
+        List<Class<?>> interfacesList = Arrays.asList(clazz.getInterfaces());
+        interfaces.addAll(interfacesList);
+
+        // now add interfaces from superclass
+        Class<?> superclass = clazz.getSuperclass();
+        if (superclass != null) {
+            addAllInterfaces(superclass, interfaces);
+        }
+    }
+
+    /**
+     * Returns a set containing all superclasses (recursively) from the given class
+     * @param clazz the class to analyze
+     * @return set of superclasses
+     */
+    public static Set<Class<?>> getAllSuperclasses(final Class<?> clazz) {
+        if (clazz == null) {
+            throw new IllegalArgumentException("clazz may not be null");
+        }
+
+        Set<Class<?>> superclasses = new HashSet<>();
+
+        Class<?> superclass = clazz.getSuperclass();
+        if (superclass != null) {
+            addAllSuperclasses(superclass, superclasses);
+        }
+
+        return superclasses;
+    }
+
+    /**
+     * Adds the class to the set of superclasses and then continues with its superclass if present
+     * @param clazz the superclass to add and analyze
+     * @param superclasses the set of superclasses
+     */
+    private static void addAllSuperclasses(final Class<?> clazz, Set<Class<?>> superclasses) {
+        superclasses.add(clazz);
+
+        Class<?> superclass = clazz.getSuperclass();
+        if (superclass != null) {
+            addAllSuperclasses(superclass, superclasses);
+        }
     }
 }

@@ -19,5 +19,8 @@ class CompanionContainerTest {
         assertThrows(BeanNotFoundException.class, () -> container.getBean(BeanDefinitionHelper.getBeanId(Consumer.class), Consumer.class));
 
         System.out.println(consumer.doConsume());
+        System.out.println(consumer.add(2, 3));
+        System.out.println(consumer.multiply(2, 3));
+        System.out.println(consumer.divide(10, 2));
     }
 }

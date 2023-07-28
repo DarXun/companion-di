@@ -34,6 +34,16 @@ public class CompanionContainer {
     private Map<BeanDefinition, BeanSupplier> beanContainerMap;
 
     /**
+     * Flags wether injection by interface should be allowed (required for ThreadScope-Beans) or not
+     */
+    private boolean doInjectByInterface = true;
+
+    /**
+     * Flags wether injection by superclass should be allowed or not
+     */
+    private boolean doInjectBySuperclass = true;
+
+    /**
      * Private constructor as the container is instantiated via setup-method
      */
     private CompanionContainer() {
@@ -125,7 +135,10 @@ public class CompanionContainer {
      */
     private <T extends Object> BeanDefinition getBeanDefinitionByClass(final Class<T> clazz) {
         for (BeanDefinition beanDefinition : beanDefinitionSet) {
-            if (beanDefinition.getClazz().equals(clazz)) {
+            boolean isClazz = beanDefinition.getClazz().equals(clazz);
+            boolean isInterfaceClazz = doInjectByInterface ? beanDefinition.getInterfaces().contains(clazz) : false;
+            boolean isSuperClazz = doInjectBySuperclass ? beanDefinition.getSuperclasses().contains(clazz) : false;
+            if (isClazz || isInterfaceClazz || isSuperClazz) {
                 return beanDefinition;
             }
         }
@@ -235,6 +248,16 @@ public class CompanionContainer {
             String[] beanIdsForDependencies = ReflectionHelper.getBeanIdsForDependencies(injectableConstructor);
             Parameter[] parameters = injectableConstructor.getParameters();
 
+            if (doInjectByInterface) {
+                Set<Class<?>> interfaces = ReflectionHelper.getAllInterfaces(clazz);
+                beanDefinition.addInterfaces(interfaces);
+            }
+
+            if (doInjectBySuperclass) {
+                Set<Class<?>> superclasses = ReflectionHelper.getAllSuperclasses(clazz);
+                superclasses.forEach(beanDefinition::addSuperclass);
+            }
+
             for (int i = 0; i < parameters.length; i++) {
                 beanDefinition.addDependency(new BeanDefinition(parameters[i].getType(), beanIdsForDependencies[i]));
             }
@@ -282,12 +305,13 @@ public class CompanionContainer {
             // if in the history of creating a bean for this beanDefinition we already came across this definition, then this is a circle injection
             throw new IllegalStateException(String.format("Circle detected while retrieving bean %s", beanDefinition));
         }
-        history.add(beanDefinition);
 
         // maybe a supplier was already created?
         if (beanContainerMap.containsKey(beanDefinition)) {
             return beanContainerMap.get(beanDefinition);
         }
+
+        history.add(beanDefinition);
 
         Object[] ctorParm;
         try {
@@ -357,7 +381,10 @@ public class CompanionContainer {
             }
         } else { // otherwise we search by type
             for (BeanDefinition beanDefinition : this.beanDefinitionSet) {
-                if (beanDefinition.getClazz().equals(dependency.getClazz())) {
+                boolean isClazz = beanDefinition.getClazz().equals(dependency.getClazz());
+                boolean isInterfaceClazz = doInjectByInterface ? beanDefinition.getInterfaces().contains(dependency.getClazz()) : false;
+                boolean isSuperClazz = doInjectBySuperclass ? beanDefinition.getSuperclasses().contains(dependency.getClazz()) : false;
+                if (isClazz || isInterfaceClazz || isSuperClazz) {
                     hits.add(beanDefinition);
                 }
             }

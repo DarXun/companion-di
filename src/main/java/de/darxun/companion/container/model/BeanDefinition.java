@@ -3,9 +3,7 @@ package de.darxun.companion.container.model;
 import de.darxun.companion.container.util.BeanDefinitionHelper;
 
 import java.lang.reflect.Constructor;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 public class BeanDefinition extends BeanDependency {
 
@@ -13,9 +11,15 @@ public class BeanDefinition extends BeanDependency {
 
     private Constructor constructor;
 
+    private Set<Class<?>> interfaces;
+
+    private Set<Class<?>> superclasses;
+
     public BeanDefinition(final Class<?> clazz, final String beanId) {
         super(clazz, beanId);
         this.dependencies = new ArrayList<>();
+        this.interfaces = new HashSet<>();
+        this.superclasses = new HashSet<>();
     }
 
     public BeanDefinition(Class<?> clazz) {
@@ -36,6 +40,33 @@ public class BeanDefinition extends BeanDependency {
 
     public void setConstructor(Constructor constructor) {
         this.constructor = constructor;
+    }
+
+    public void addInterface(Class<?> interfaceClazz) {
+        this.interfaces.add(interfaceClazz);
+    }
+
+    public void addInterfaces(Set<Class<?>> interfaces) {
+        this.interfaces.addAll(interfaces);
+    }
+
+    public void addSuperclass(Class<?> superClazz) {
+        this.superclasses.add(superClazz);
+    }
+
+    public Set<Class<?>> getInterfaces() {
+        return Collections.unmodifiableSet(interfaces);
+    }
+
+    public Set<Class<?>> getSuperclasses() {
+        return Collections.unmodifiableSet(superclasses);
+    }
+
+    public Set<Class<?>> getInterfacesAndSuperclasses() {
+        Set<Class<?>> classes = Collections.unmodifiableSet(interfaces);
+        classes.addAll(superclasses);
+
+        return classes;
     }
 
     @Override
