@@ -33,7 +33,7 @@ public class ReflectionHelper {
      * @return set of methods the annotation is present on
      */
     public static Set<Method> getMethodWithAnnotation(Class<?> clazz, Class<? extends Annotation> annotationClazz) {
-        // for performance measures we do not if this is a method-level-annotation
+        // for performance measures we do not check if this is a method-level-annotation
         return Arrays.stream(clazz.getMethods()).filter(method -> method.isAnnotationPresent(annotationClazz)).collect(Collectors.toSet());
     }
 
