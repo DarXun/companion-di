@@ -14,7 +14,7 @@ Other than that no features are planned.
 Call *CompanionContainer.setup()* to initialize your *@Beans* and use *getBean* on the container.
 
 1. Define your beans via *@Bean*-Annotation and give them an id with javax.inject's *@Named* or via *value on the @Bean*-Annotation.
-2. Inject your beans via constructor-injection with javax.inject's *@Inject*-Annotation on the relevant constructor. If there's only one constructor present that one will be used.
+2. Inject your beans via constructor-injection with javax.inject's *@Inject*-Annotation on the relevant constructor.
 3. The default scope for any bean is the singleton scope but with *@ThreadScope* you can limit the beans lifecycle to a thread.
 
 ## License
