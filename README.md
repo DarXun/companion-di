@@ -5,8 +5,7 @@ Its goal is to smoothen the development of small tools projects without the over
 
 ## Upcoming features
 
-1. Currently only singleton beans are supported. I'm planning on adding support for a thread scope to simplify multithreading in tools projects.
-2. The @Bean-Annotation only works on class-level so far but will be supported on methods via @Configuration-Classes in the future.
+1. The @Bean-Annotation only works on class-level so far but will be supported on methods via @Configuration-Classes in the future.
 
 Other than that no features are planned.
 
@@ -14,7 +13,9 @@ Other than that no features are planned.
 
 Call *CompanionContainer.setup()* to initialize your *@Beans* and use *getBean* on the container.
 
-Aside from *Bean*-Annotation just use javax.inject's *@Inject* and *@Named*. 
+1. Define your beans via *@Bean*-Annotation and give them an id with javax.inject's *@Named* or via *value on the @Bean*-Annotation.
+2. Inject your beans via constructor-injection with javax.inject's *@Inject*-Annotation on the relevant constructor. If there's only one constructor present that one will be used.
+3. The default scope for any bean is the singleton scope but with *@ThreadScope* you can limit the beans lifecycle to a thread.
 
 ## License
 
