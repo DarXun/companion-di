@@ -1,6 +1,8 @@
-package szenario.simple;
+package de.darxun.companion.container;
 
 import de.darxun.companion.api.Bean;
+
+import javax.inject.Inject;
 
 @Bean("someProvider")
 public class Provider {

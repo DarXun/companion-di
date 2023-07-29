@@ -3,6 +3,7 @@ package de.darxun.companion.container;
 import de.darxun.companion.BeanComputationException;
 import de.darxun.companion.BeanCreationException;
 import de.darxun.companion.BeanNotFoundException;
+import de.darxun.companion.NoUniqueBeanFoundException;
 import de.darxun.companion.api.ThreadScope;
 import de.darxun.companion.container.model.*;
 import de.darxun.companion.container.model.beansupplier.BeanSupplier;
@@ -22,9 +23,14 @@ import java.util.*;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import static java.lang.System.Logger.Level;
+
 // TODO add support for @Configuration-Classes
-// TODO add support for ThreadScope
+// TODO if there's only one ctor consider this as injectable
+// TODO maybe add support for lazy-init
 public class CompanionContainer {
+
+    private static final System.Logger LOGGER = System.getLogger(CompanionContainer.class.getName());
 
     /**
      * Containing all BeanDefinitions
@@ -60,6 +66,12 @@ public class CompanionContainer {
      */
     public static CompanionContainer setup() {
         CompanionContainer container = new CompanionContainer();
+
+        if (LOGGER.isLoggable(Level.INFO)) {
+            LOGGER.log(Level.INFO, "Injection by interface is {0}", container.doInjectByInterface ? "enabled" : "disabled");
+            LOGGER.log(Level.INFO, "Injection by superclass is {0}", container.doInjectBySuperclass ? "enabled" : "disabled");
+        }
+
         container.init();
         return container;
     }
@@ -100,9 +112,15 @@ public class CompanionContainer {
     public <T extends Object> T getBean(final Class<T> clazz) {
         T bean;
 
+        final String bdfBeanId = BeanDefinitionHelper.getBeanId(clazz);
+
         try {
-            bean = getBean(BeanDefinitionHelper.getBeanId(clazz), clazz);
+            bean = getBean(bdfBeanId, clazz);
         } catch (BeanNotFoundException e) {
+            if (LOGGER.isLoggable(Level.DEBUG)) {
+                LOGGER.log(Level.DEBUG, "Bean could not be found by default bean id ({0})", bdfBeanId);
+            }
+
             // maybe there was no bean definition for the standard bean id
             bean = getBean(getBeanDefinitionByClass(clazz).getId(), clazz);
         }
@@ -135,18 +153,55 @@ public class CompanionContainer {
      * May throw a BeanNotFoundException if no matching BeanDefinition could be found.
      * @param clazz the class
      * @return the BeanDefinition
+     * @param <T> type of the bean
      */
     private <T extends Object> BeanDefinition getBeanDefinitionByClass(final Class<T> clazz) {
+        List<BeanDefinition> matches = new ArrayList<>();
+
         for (BeanDefinition beanDefinition : beanDefinitionSet) {
             boolean isClazz = beanDefinition.getClazz().equals(clazz);
             boolean isInterfaceClazz = doInjectByInterface ? beanDefinition.getInterfaces().contains(clazz) : false;
             boolean isSuperClazz = doInjectBySuperclass ? beanDefinition.getSuperclasses().contains(clazz) : false;
+
             if (isClazz || isInterfaceClazz || isSuperClazz) {
-                return beanDefinition;
+                logMatchingInfo(beanDefinition, clazz, isClazz, isInterfaceClazz, isSuperClazz);
+                matches.add(beanDefinition);
             }
         }
 
+        if (matches.size() == 1) {
+            return matches.get(0);
+        } else if (matches.size() > 1) {
+            throw new NoUniqueBeanFoundException(String.format("No unique bean found for class %s", clazz));
+        }
+
         throw new BeanNotFoundException(String.format("No bean found for class %s", clazz));
+    }
+
+    /**
+     * Logs some additional information on how the bean definition is a match for the given class
+     * @param beanDefinition the BeanDefinition that matches
+     * @param clazz the class that matches
+     * @param isClazz true, if they match by class
+     * @param isInterfaceClazz true, if they match by interface
+     * @param isSuperClazz true, if they match by superclass
+     * @param <T> type of the bean
+     */
+    private <T extends Object> void logMatchingInfo(BeanDefinition beanDefinition, Class<T> clazz, boolean isClazz, boolean isInterfaceClazz, boolean isSuperClazz) {
+        if (LOGGER.isLoggable(Level.INFO)) {
+            List<String> matchInfo = new ArrayList<>(3);
+            if (isClazz) {
+                matchInfo.add("by class");
+            }
+            if (isInterfaceClazz) {
+                matchInfo.add("by interface");
+            }
+            if (isSuperClazz) {
+                matchInfo.add("by superclass");
+            }
+
+            LOGGER.log(Level.DEBUG, String.format("BeanDefinition (%s) is a match for class (%s) %s", beanDefinition.toString(), clazz.getName(), matchInfo.stream().collect(Collectors.joining(","))));
+        }
     }
 
     /**
@@ -170,6 +225,10 @@ public class CompanionContainer {
      * @return @Bean-Classes
      */
     private Set<Class<?>> findBeanClasses(Set<Class<?>> classes) {
+        if (LOGGER.isLoggable(Level.TRACE)) {
+            LOGGER.log(Level.TRACE, "Finding beans");
+        }
+
         return classes.stream().filter(cls -> ReflectionHelper.hasClassAnnotation(cls, Bean.class)).collect(Collectors.toSet());
     }
 
@@ -229,6 +288,10 @@ public class CompanionContainer {
      * @return BeanDefinitions
      */
     private Set<BeanDefinition> computeBeanDefinitons(Set<Class<?>> beanClasses) {
+        if (LOGGER.isLoggable(Level.TRACE)) {
+            LOGGER.log(Level.TRACE, "Computing BeanDefinitions");
+        }
+
         Set<BeanDefinition> beanDefinitions = new HashSet<>(beanClasses.size());
 
         for (Class<?> clazz : beanClasses) {
@@ -304,6 +367,10 @@ public class CompanionContainer {
      * @param beanDefinitions BeanDefinitions to create instances for
      */
     private void initializeBeans(Set<BeanDefinition> beanDefinitions) {
+        if (LOGGER.isLoggable(Level.TRACE)) {
+            LOGGER.log(Level.TRACE, "Initializing beans");
+        }
+
         ArrayList<BeanDefinition> sortedBeanDefinitions = new ArrayList<>(beanDefinitions);
 
         // to lessen the chance of deep recursion, we sort the BeanDefinitions by the number of their dependencies (ascending)
@@ -316,7 +383,7 @@ public class CompanionContainer {
             BeanDefinition beanDefinition = sortedBeanDefinitions.get(i);
             // this is the first getOrCreateBean-call, there may be more to come recursively
             // to pretend a circle-injection we create a temporary history
-            Set<BeanDefinition> history = new HashSet<>();
+            List<BeanDefinition> history = new ArrayList<>();
 
             BeanSupplier beanSupplier = getOrCreateBean(beanDefinition, history);
 
@@ -331,9 +398,11 @@ public class CompanionContainer {
      * @param beanDefinition the BeanDefinition
      * @return the BeanSupplier
      */
-    private BeanSupplier getOrCreateBean(final BeanDefinition beanDefinition, Set<BeanDefinition> history) {
+    private BeanSupplier getOrCreateBean(final BeanDefinition beanDefinition, List<BeanDefinition> history) {
         if (history.contains(beanDefinition)) {
+            history.add(beanDefinition);
             // if in the history of creating a bean for this beanDefinition we already came across this definition, then this is a circle injection
+            LOGGER.log(Level.ERROR, "Circle detected in history: {0}", history.stream().map(BeanDefinition::toString).collect(Collectors.joining(" -> ")));
             throw new IllegalStateException(String.format("Circle detected while retrieving bean %s", beanDefinition));
         }
 
@@ -405,7 +474,7 @@ public class CompanionContainer {
      * @param history the bean-creation history containing all BeanDefinitions visited while creating a bean
      * @return Constructor-Parameter to instantiate the bean
      */
-    private Object[] createConstructorParameters(BeanDefinition beanDefinition, Set<BeanDefinition> history) {
+    private Object[] createConstructorParameters(BeanDefinition beanDefinition, List<BeanDefinition> history) {
         final List<BeanDependency> dependencies = beanDefinition.getDependencies();
         Object[] ctorParm = new Object[dependencies.size()];
 

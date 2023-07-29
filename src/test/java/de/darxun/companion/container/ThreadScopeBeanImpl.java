@@ -1,4 +1,4 @@
-package szenario.simple;
+package de.darxun.companion.container;
 
 import de.darxun.companion.api.Bean;
 import de.darxun.companion.api.ThreadScope;

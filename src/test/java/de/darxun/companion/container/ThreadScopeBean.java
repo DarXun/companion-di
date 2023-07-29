@@ -1,4 +1,4 @@
-package szenario.simple;
+package de.darxun.companion.container;
 
 public interface ThreadScopeBean {
 
