@@ -1,11 +1,13 @@
 package de.darxun.companion.container;
 
+import de.darxun.companion.BeanComputationException;
 import de.darxun.companion.BeanCreationException;
 import de.darxun.companion.BeanNotFoundException;
-import de.darxun.companion.container.model.BeanDefinition;
-import de.darxun.companion.container.model.BeanDependency;
-import de.darxun.companion.container.model.BeanSupplier;
-import de.darxun.companion.container.model.SingletonBeanSupplier;
+import de.darxun.companion.api.ThreadScope;
+import de.darxun.companion.container.model.*;
+import de.darxun.companion.container.model.beansupplier.BeanSupplier;
+import de.darxun.companion.container.model.beansupplier.SingletonBeanSupplier;
+import de.darxun.companion.container.model.beansupplier.ThreadScopeBeanSupplier;
 import de.darxun.companion.container.util.BeanDefinitionHelper;
 import de.darxun.companion.container.util.ReflectionHelper;
 import de.darxun.companion.api.Bean;
@@ -17,6 +19,7 @@ import java.lang.reflect.Parameter;
 import java.net.URISyntaxException;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 // TODO add support for @Configuration-Classes
@@ -36,12 +39,12 @@ public class CompanionContainer {
     /**
      * Flags wether injection by interface should be allowed (required for ThreadScope-Beans) or not
      */
-    private boolean doInjectByInterface = true;
+    private final boolean doInjectByInterface = true;
 
     /**
      * Flags wether injection by superclass should be allowed or not
      */
-    private boolean doInjectBySuperclass = true;
+    private final boolean doInjectBySuperclass = true;
 
     /**
      * Private constructor as the container is instantiated via setup-method
@@ -229,43 +232,71 @@ public class CompanionContainer {
         Set<BeanDefinition> beanDefinitions = new HashSet<>(beanClasses.size());
 
         for (Class<?> clazz : beanClasses) {
-            Constructor injectableConstructor = ReflectionHelper.getInjectableConstructor(clazz);
-            final String beanId = ReflectionHelper.getBeanId(clazz);
+            try {
+                Constructor injectableConstructor = ReflectionHelper.getInjectableConstructor(clazz);
+                final String beanId = ReflectionHelper.getBeanId(clazz);
 
-            if (beanId != null && beanId.trim().length() == 0) {
-                throw new IllegalStateException(String.format("The id (%s) is not a valid bean id.", beanId));
+                if (beanId != null && beanId.trim().length() == 0) {
+                    throw new IllegalStateException(String.format("The id (%s) is not a valid bean id.", beanId));
+                }
+
+                boolean isThreadScopeBean = false;
+                Set<Class<?>> interfaces;
+                if (doInjectByInterface) {
+                    interfaces = ReflectionHelper.getAllInterfaces(clazz);
+
+                    isThreadScopeBean = isThreadScopeBean(clazz, interfaces);
+                }
+
+                BeanDefinition beanDefinition;
+                if (beanId == null) {
+                    beanDefinition = new BeanDefinition(clazz, isThreadScopeBean ? BeanScope.Thread : BeanScope.Singleton);
+                } else {
+                    beanDefinition = new BeanDefinition(clazz, beanId, isThreadScopeBean ? BeanScope.Thread : BeanScope.Singleton);
+                }
+
+                beanDefinition.setConstructor(injectableConstructor);
+
+                String[] beanIdsForDependencies = ReflectionHelper.getBeanIdsForDependencies(injectableConstructor);
+                Parameter[] parameters = injectableConstructor.getParameters();
+
+                if (doInjectByInterface) {
+                    beanDefinition.addInterfaces(interfaces);
+                }
+
+                if (doInjectBySuperclass) {
+                    Set<Class<?>> superclasses = ReflectionHelper.getAllSuperclasses(clazz);
+                    superclasses.forEach(beanDefinition::addSuperclass);
+                }
+
+                for (int i = 0; i < parameters.length; i++) {
+                    beanDefinition.addDependency(new BeanDefinition(parameters[i].getType(), beanIdsForDependencies[i]));
+                }
+
+                beanDefinitions.add(beanDefinition);
+            } catch (RuntimeException e) {
+                throw new BeanComputationException(String.format("BeanDefinition for class (%s) could not be computed", clazz.getName()), e);
             }
-
-            BeanDefinition beanDefinition;
-            if (beanId == null) {
-                beanDefinition = new BeanDefinition(clazz);
-            } else {
-                beanDefinition = new BeanDefinition(clazz, beanId);
-            }
-
-            beanDefinition.setConstructor(injectableConstructor);
-
-            String[] beanIdsForDependencies = ReflectionHelper.getBeanIdsForDependencies(injectableConstructor);
-            Parameter[] parameters = injectableConstructor.getParameters();
-
-            if (doInjectByInterface) {
-                Set<Class<?>> interfaces = ReflectionHelper.getAllInterfaces(clazz);
-                beanDefinition.addInterfaces(interfaces);
-            }
-
-            if (doInjectBySuperclass) {
-                Set<Class<?>> superclasses = ReflectionHelper.getAllSuperclasses(clazz);
-                superclasses.forEach(beanDefinition::addSuperclass);
-            }
-
-            for (int i = 0; i < parameters.length; i++) {
-                beanDefinition.addDependency(new BeanDefinition(parameters[i].getType(), beanIdsForDependencies[i]));
-            }
-
-            beanDefinitions.add(beanDefinition);
         }
 
         return beanDefinitions;
+    }
+
+    /**
+     * Returns wether the bean is a valid thread-scope bean.
+     * To be so, the bean must be annotated with @ThreadScope and must implement atleast one interface.
+     * @param clazz the class to analyze
+     * @param interfaces the classes interfaces
+     * @return true, if this bean-class qualifies as a thread-scope-bean
+     */
+    private boolean isThreadScopeBean(Class<?> clazz, Set<Class<?>> interfaces) {
+        boolean hasThreadScopeAnnotation = clazz.isAnnotationPresent(ThreadScope.class);
+
+        if (hasThreadScopeAnnotation && interfaces.size() == 0) {
+            throw new IllegalStateException(String.format("The class (%s) must implement atleast one interface in order to register for a ThreadScope-Bean", clazz.getName()));
+        }
+
+        return hasThreadScopeAnnotation;
     }
 
     /**
@@ -320,23 +351,50 @@ public class CompanionContainer {
             throw new BeanCreationException(String.format("Error retrieving constructor parameters to create bean %s", beanDefinition), e);
         }
 
-        Object instance = null;
+        BeanSupplier beanSupplier;
 
-        try {
-            instance = beanDefinition.getClazz().cast(beanDefinition.getConstructor().newInstance(ctorParm));
-        } catch (InstantiationException e) {
-            throw new BeanCreationException(e);
-        } catch (IllegalAccessException e) {
-            throw new BeanCreationException(e);
-        } catch (InvocationTargetException e) {
-            throw new BeanCreationException(e);
+        Supplier<Object> instantiator = createBeanInstantiator(beanDefinition, ctorParm);
+
+        BeanScope beanScope = beanDefinition.getScope();
+        switch (beanScope) {
+            case Singleton:
+                Object instance = instantiator.get();
+                if (instance == null) {
+                    throw new RuntimeException(String.format("Unexpected error creating bean %s", beanDefinition.getId()));
+                }
+
+                beanSupplier = new SingletonBeanSupplier(instance);
+                break;
+
+            case Thread:
+                beanSupplier = new ThreadScopeBeanSupplier(beanDefinition, instantiator);
+                break;
+
+            default:
+                throw new BeanCreationException(String.format("Bean (%s) cannot be created with Scope %s", beanDefinition.getId(), beanScope));
         }
 
-        if (instance == null) {
-            throw new RuntimeException(String.format("Unexpected error creating bean %s", beanDefinition.getId()));
-        }
+        return beanSupplier;
+    }
 
-        return new SingletonBeanSupplier(instance);
+    /**
+     * Creates an instantiator to use by/for a BeanSupplier
+     * @param beanDefinition the BeanDefinition to create a bean for
+     * @param ctorParm the constructor-parameters to instantiate the bean
+     * @return a supplier that returns an instance for the bean
+     */
+    private static Supplier<Object> createBeanInstantiator(BeanDefinition beanDefinition, Object[] ctorParm) {
+        return () -> {
+            try {
+                return beanDefinition.getClazz().cast(beanDefinition.getConstructor().newInstance(ctorParm));
+            } catch (InstantiationException e) {
+                throw new BeanCreationException(e);
+            } catch (IllegalAccessException e) {
+                throw new BeanCreationException(e);
+            } catch (InvocationTargetException e) {
+                throw new BeanCreationException(e);
+            }
+        };
     }
 
     /**

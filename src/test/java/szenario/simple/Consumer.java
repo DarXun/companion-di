@@ -18,13 +18,16 @@ public class Consumer {
 
     private AbstractSuperWorker abstractSuperWorker;
 
+    private ThreadScopeBean threadScopeBean;
+
     @Inject
-    public Consumer(@Named("someProvider") Provider provider, AnotherProvider anotherProvider, Worker worker, SuperWorker superWorker, AbstractSuperWorker abstractSuperWorker) {
+    public Consumer(@Named("someProvider") Provider provider, AnotherProvider anotherProvider, Worker worker, SuperWorker superWorker, AbstractSuperWorker abstractSuperWorker, ThreadScopeBean threadScopeBean) {
         this.provider = provider;
         this.anotherProvider = anotherProvider;
         this.worker = worker;
         this.superWorker = superWorker;
         this.abstractSuperWorker = abstractSuperWorker;
+        this.threadScopeBean = threadScopeBean;
     }
 
     public String doConsume() {
@@ -41,5 +44,9 @@ public class Consumer {
 
     public String divide(int x, int y) {
         return String.format("%d / %d = %f", x, y, abstractSuperWorker.divide(x, y));
+    }
+
+    public Thread getThreadFromThreadScopeBean() {
+        return threadScopeBean.getThread();
     }
 }

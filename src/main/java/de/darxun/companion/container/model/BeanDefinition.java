@@ -15,15 +15,26 @@ public class BeanDefinition extends BeanDependency {
 
     private Set<Class<?>> superclasses;
 
+    private BeanScope scope;
+
     public BeanDefinition(final Class<?> clazz, final String beanId) {
+        this(clazz, beanId, BeanScope.Singleton);
+    }
+
+    public BeanDefinition(final Class<?> clazz, final String beanId, final BeanScope scope) {
         super(clazz, beanId);
         this.dependencies = new ArrayList<>();
         this.interfaces = new HashSet<>();
         this.superclasses = new HashSet<>();
+        this.scope = scope;
     }
 
     public BeanDefinition(Class<?> clazz) {
         this(clazz, BeanDefinitionHelper.getBeanId(clazz));
+    }
+
+    public BeanDefinition(Class<?> clazz, final BeanScope scope) {
+        this(clazz, BeanDefinitionHelper.getBeanId(clazz), scope);
     }
 
     public void addDependency(BeanDependency dependecy) {
@@ -69,11 +80,17 @@ public class BeanDefinition extends BeanDependency {
         return classes;
     }
 
+    public BeanScope getScope() {
+        return scope;
+    }
+
     @Override
     public String toString() {
-        return "BeanDefinition{" +
-                "clazz=" + getClazz() +
-                ", id='" + getId() + '\'' +
-                '}';
+        final StringBuffer sb = new StringBuffer("BeanDefinition{");
+        sb.append("id=").append(getId());
+        sb.append(", clazz=").append(getClazz());
+        sb.append(", scope=").append(scope);
+        sb.append('}');
+        return sb.toString();
     }
 }

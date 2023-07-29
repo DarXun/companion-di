@@ -1,4 +1,4 @@
-package de.darxun.companion.container.model;
+package de.darxun.companion.container.model.beansupplier;
 
 import java.util.function.Supplier;
 

@@ -22,5 +22,14 @@ class CompanionContainerTest {
         System.out.println(consumer.add(2, 3));
         System.out.println(consumer.multiply(2, 3));
         System.out.println(consumer.divide(10, 2));
+
+        for (int i = 0; i <= 10; i++) {
+            new Thread(() -> {
+                Thread currentThread = Thread.currentThread();
+                Thread threadFromThreadScopeBean = consumer.getThreadFromThreadScopeBean();
+                assertEquals(currentThread, threadFromThreadScopeBean);
+                System.out.println(String.format("Current thread: %s, Thread from ThreadScopeBean: %s", currentThread, threadFromThreadScopeBean));
+            }).start();
+        }
     }
 }
